@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHD-CCP: Packet Layers & Security Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f1f5f9;
+        }
+        .mono { font-family: 'Fira Code', monospace; }
+        
+        .packet-container { perspective: 1000px; }
+        .layer { transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); transform-style: preserve-3d; }
+        .layer-inactive { opacity: 0.3; filter: grayscale(1); transform: scale(0.95); }
+        .layer-active { opacity: 1; filter: grayscale(0); transform: scale(1.05) translateZ(20px); border-color: #38bdf8; box-shadow: 0 0 20px rgba(56, 189, 248, 0.3); }
+
+        .step-card { border-left: 4px solid #334155; transition: all 0.3s ease; }
+        .step-card.active { border-left-color: #38bdf8; background-color: #1e293b; }
+        
+        .core-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+        .core-cell { text-align: center; padding: 4px; font-size: 0.7rem; border: 1px solid #334155; background: #1e293b; }
+
+        .tab-btn { border-bottom: 2px solid transparent; transition: all 0.3s; }
+        .tab-btn.active { border-bottom-color: #ec4899; color: white; border-bottom-width: 4px;}
+        
+        /* SCP Specific Visuals */
+        .crypto-block { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .crypto-hidden { opacity: 0; transform: translateY(20px) scale(0.9); pointer-events: none; }
+        .crypto-visible { opacity: 1; transform: translateY(0) scale(1); }
+
+        /* Flow Visuals */
+        .node-box { transition: all 0.3s; }
+        .node-active { border-color: #34d399; box-shadow: 0 0 20px rgba(52, 211, 153, 0.2); }
+        .traveling-packet {
+            transition: all 1s ease-in-out;
+            position: absolute;
+            z-index: 50;
+        }
+        .check-badge {
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .check-visible { opacity: 1; transform: scale(1); }
+
+        /* Table Styles */
+        .cal-table th { @apply bg-slate-800 text-slate-300 p-3 text-left text-xs font-bold uppercase border-b border-slate-700; }
+        .cal-table td { @apply p-3 border-b border-slate-800 text-sm font-mono text-slate-400; }
+        .cal-table tr:hover td { @apply bg-slate-800/50 text-white; }
+        
+        .launch-btn {
+            @apply inline-flex items-center gap-2 px-3 py-1 bg-slate-700 hover:bg-pink-600 text-xs font-bold text-white rounded transition-colors duration-300 ml-4;
+        }
+        
+        /* Tutorial Styles */
+        .tutorial-box { @apply bg-slate-800/30 p-6 rounded-lg border border-slate-700 mb-8; }
+        .tutorial-header { @apply text-xl font-bold text-white mb-2 flex items-center gap-2; }
+        .tutorial-text { @apply text-slate-400 text-sm leading-relaxed mb-4; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">SHD-CCP Packet Architect</h1>
+            <p class="text-slate-400">Technical Specifications & Interactive Simulations</p>
+        </header>
+
+        <!-- Tab Navigation (Reordered) -->
+        <div class="flex justify-center mb-8 border-b border-slate-700 overflow-x-auto bg-slate-900/50 rounded-t-xl">
+            <button onclick="switchTab('cal')" id="btn-cal" class="tab-btn active px-6 py-4 font-bold text-sm md:text-lg text-slate-400 hover:text-white whitespace-nowrap">
+                1. BioChain AI Tutorial
+            </button>
+            <button onclick="switchTab('lpf')" id="btn-lpf" class="tab-btn px-6 py-4 font-bold text-sm md:text-lg text-slate-400 hover:text-white whitespace-nowrap">
+                2. LPF Builder
+            </button>
+            <button onclick="switchTab('scp')" id="btn-scp" class="tab-btn px-6 py-4 font-bold text-sm md:text-lg text-slate-400 hover:text-white whitespace-nowrap">
+                3. SCP Security
+            </button>
+            <button onclick="switchTab('flow')" id="btn-flow" class="tab-btn px-6 py-4 font-bold text-sm md:text-lg text-slate-400 hover:text-white whitespace-nowrap">
+                4. Protocol Flow
+            </button>
+        </div>
+
+        <!-- TAB 1: BIOCHAIN AI TUTORIAL (Updated) -->
+        <div id="tab-cal" class="tab-content block">
+            <div class="bg-slate-900 rounded-xl border border-slate-700 p-8 shadow-xl max-w-5xl mx-auto">
+                <div class="flex justify-between items-start mb-8 border-b border-slate-800 pb-6">
+                    <div>
+                        <h2 class="text-3xl font-bold text-white mb-2 tracking-tight">BioChain AI <span class="text-pink-500">Official Protocol Tutorial</span></h2>
+                        <p class="text-sm text-slate-400 max-w-2xl">
+                            Welcome to the architectural overview of the <strong>SHD-CCP (Secure Hash Data - Cognitive Chain Protocol)</strong>. 
+                            This document outlines the exact mechanisms used to achieve quantum-resistant data immutability and neural-symbolic transmission.
+                        </p>
+                    </div>
+                    <div class="text-right text-xs font-mono text-slate-500 bg-slate-800 p-3 rounded border border-slate-700">
+                        <div class="text-pink-400 font-bold mb-1">SYSTEM STATUS: ONLINE</div>
+                        <div>Ver: 1.0.4-Release</div>
+                        <div>Auth: BioChain AI Core</div>
+                    </div>
+                </div>
+
+                <!-- Section 1: The Core (LPF) -->
+                <div class="tutorial-box border-l-4 border-l-blue-500">
+                    <div class="tutorial-header text-blue-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        1. The Logical Packet Frame (LPF)
+                    </div>
+                    <p class="tutorial-text">
+                        At the heart of our system lies the LPF. Unlike standard "dumb" packets, the LPF is a <strong>self-contained neural-symbolic unit</strong>. We use a 128-bit frame structure to balance extreme efficiency with necessary context. The 64-bit Core Payload is the "token" used by our AI models, containing a quaternion pointer to the Codex. The Header and Footer allow for hardware-level routing and integrity checks before any expensive cryptography is performed.
+                    </p>
+                    
+                    <div class="overflow-x-auto mb-4 rounded-lg border border-slate-700 bg-slate-900/50">
+                        <table class="w-full cal-table">
+                            <thead><tr><th>Segment</th><th>Bit Width</th><th>Byte Size</th><th>Role</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td>Header</td><td>32 bits</td><td>4 Bytes</td><td>Context</td><td>Version, Type, Timestamp. Allows routing without decryption.</td></tr>
+                                <tr><td>Payload</td><td>64 bits</td><td>8 Bytes</td><td>Data</td><td>The Neural-Symbolic Token. Quaternion pointer + scaling logic.</td></tr>
+                                <tr><td>Footer</td><td>32 bits</td><td>4 Bytes</td><td>Integrity</td><td>CRC32 Checksum. Fast, hardware-level error detection.</td></tr>
+                                <tr class="bg-blue-900/20 text-blue-200 font-bold"><td>TOTAL</td><td>128 bits</td><td>16 Bytes</td><td>Frame</td><td>The fundamental atomic unit of the BioChain protocol.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button onclick="switchTab('lpf')" class="launch-btn bg-blue-600 hover:bg-blue-500 ml-0">
+                        Interactive LPF Builder &rarr;
+                    </button>
+                </div>
+
+                <!-- Section 2: Genesis Security -->
+                <div class="tutorial-box border-l-4 border-l-purple-500">
+                    <div class="tutorial-header text-purple-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path></svg>
+                        2. The Genesis Anchor (Root Security)
+                    </div>
+                    <p class="tutorial-text">
+                        Every chain must start somewhere. The <strong>Genesis Packet</strong> is the "Big Bang" of a data stream. It is unique because it must be <strong>self-verifying</strong>. We embed the complete Falcon Public Key directly into this packet. This allows any receiver to verify the entire subsequent chain without needing to query a central server, enabling true decentralized trust.
+                    </p>
+                    
+                    <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/50 mb-4">
+                        <table class="w-full cal-table text-xs">
+                            <thead><tr><th class="bg-slate-900">Component</th><th class="bg-slate-900">Falcon-512 (Standard)</th><th class="bg-slate-900">Falcon-1024 (Military)</th></tr></thead>
+                            <tbody>
+                                <tr><td>Payload (LPF)</td><td>16 Bytes</td><td>16 Bytes</td></tr>
+                                <tr><td class="text-purple-300 font-bold">Linkage (Public Key)</td><td>897 Bytes</td><td>1,793 Bytes</td></tr>
+                                <tr><td>Authentication (Sig)</td><td>666 Bytes</td><td>1,280 Bytes</td></tr>
+                                <tr class="text-white font-bold bg-slate-800/30"><td>Total Size</td><td>1,579 Bytes</td><td>3,089 Bytes</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button onclick="switchTab('scp')" class="launch-btn bg-purple-600 hover:bg-purple-500 ml-0">
+                        Simulate Genesis Encryption &rarr;
+                    </button>
+                </div>
+
+                <!-- Section 3: Chained Security -->
+                <div class="tutorial-box border-l-4 border-l-pink-500">
+                    <div class="tutorial-header text-pink-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                        3. The Chained Packet (Immutable History)
+                    </div>
+                    <p class="tutorial-text">
+                        This is the standard packet for data transmission. Instead of re-sending the Public Key, we embed the <strong>Signature of the Previous Packet</strong>. This creates a cryptographic "Hash Pointer." If a single bit of history is altered, the signature chain breaks instantly. This mechanism provides the <strong>absolute traceability</strong> required for high-stakes AI and financial data.
+                    </p>
+                    
+                    <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/50 mb-4">
+                        <table class="w-full cal-table text-xs">
+                            <thead><tr><th class="bg-slate-900">Component</th><th class="bg-slate-900">Falcon-512 (Standard)</th><th class="bg-slate-900">Falcon-1024 (Military)</th></tr></thead>
+                            <tbody>
+                                <tr><td>Payload (LPF)</td><td>16 Bytes</td><td>16 Bytes</td></tr>
+                                <tr><td class="text-pink-300 font-bold">Linkage (Prev Sig)</td><td>666 Bytes</td><td>1,280 Bytes</td></tr>
+                                <tr><td>Authentication (Sig)</td><td>666 Bytes</td><td>1,280 Bytes</td></tr>
+                                <tr class="text-white font-bold bg-slate-800/30"><td>Total Size</td><td>1,348 Bytes</td><td>2,576 Bytes</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button onclick="switchTab('scp')" class="launch-btn bg-pink-600 hover:bg-pink-500 ml-0">
+                        Simulate Chain Linking &rarr;
+                    </button>
+                </div>
+                
+                <!-- Section 4: Performance -->
+                <div class="tutorial-box border-l-4 border-l-teal-500 mb-0">
+                    <div class="tutorial-header text-teal-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        4. Transmission Performance
+                    </div>
+                    <p class="tutorial-text">
+                        Security often comes at the cost of speed. BioChain AI optimizes this trade-off. While Falcon adds overhead compared to raw data, our benchmarks show that on standard gigabit networks, packet transmission remains in the <strong>microsecond range</strong>. This allows for real-time applications despite the heavy post-quantum encryption.
+                    </p>
+                    <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/50 mb-4">
+                        <table class="w-full cal-table text-center">
+                            <thead>
+                                <tr>
+                                    <th class="text-left">Network Speed</th>
+                                    <th>Genesis (512)</th>
+                                    <th>Chained (512)</th>
+                                    <th>Genesis (1024)</th>
+                                    <th>Chained (1024)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="text-left font-bold text-white">1 Gbps</td><td>12.6 µs</td><td>10.7 µs</td><td>24.7 µs</td><td>20.6 µs</td></tr>
+                                <tr><td class="text-left font-bold text-white">100 Mbps</td><td>126 µs</td><td>107 µs</td><td>247 µs</td><td>206 µs</td></tr>
+                                <tr><td class="text-left font-bold text-white">10 Mbps</td><td>1.26 ms</td><td>1.07 ms</td><td>2.47 ms</td><td>2.06 ms</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button onclick="switchTab('flow')" class="launch-btn bg-teal-600 hover:bg-teal-500 ml-0">
+                        Run Flow Simulation &rarr;
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- TAB 2: LPF BUILDER (Original Tab 1) -->
+        <div id="tab-lpf" class="tab-content hidden">
+             <!-- Controls Section -->
+            <div class="bg-slate-800/80 rounded-xl p-6 mb-8 border border-slate-700 shadow-lg">
+                <div class="grid md:grid-cols-3 gap-6">
+                    <div class="space-y-4">
+                        <h3 class="text-amber-400 font-bold text-sm uppercase tracking-wide">Core Generation</h3>
+                        <button onclick="generateRandomPacket()" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded font-bold transition shadow-lg flex items-center justify-center gap-2">
+                            GENERATE RANDOM SEED
+                        </button>
+                        <p class="text-xs text-slate-400 text-center">Creates standard uniform packet with quaternion center.</p>
+                    </div>
+                    <div class="space-y-4">
+                        <h3 class="text-blue-400 font-bold text-sm uppercase tracking-wide">Header Config (32-bit)</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-xs text-slate-500 block">Version</label>
+                                <input type="text" id="input-ver" value="1" maxlength="1" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-blue-300 mono text-center" oninput="updateCalculations()">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 block">Type</label>
+                                <input type="text" id="input-type" value="A" maxlength="1" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-blue-300 mono text-center" oninput="updateCalculations()">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-xs text-slate-500 block">Timestamp</label>
+                                <input type="text" id="input-time" value="D4E5F6" maxlength="6" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-blue-300 mono text-center" oninput="updateCalculations()">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <h3 class="text-teal-400 font-bold text-sm uppercase tracking-wide">Footer Config (32-bit)</h3>
+                        <div>
+                            <label class="text-xs text-slate-500 block">CRC32 Override</label>
+                            <input type="text" id="input-crc" value="C0FFEE99" maxlength="8" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-teal-300 mono text-center" oninput="updateCalculations()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-8 items-start">
+                <div class="sticky top-8 space-y-6">
+                    <div class="bg-black/50 rounded-lg p-4 border border-slate-700 font-mono text-sm overflow-x-auto">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-slate-400 text-xs uppercase font-bold">Live Hex Stream</span>
+                            <span id="total-bits-display" class="text-pink-400 text-xs font-bold">0 Bits</span>
+                        </div>
+                        <div class="flex space-x-1 break-all" id="hex-stream-container">
+                            <span id="hex-header" class="text-blue-400 opacity-30">--------</span>
+                            <span id="hex-core" class="text-amber-400 opacity-30">----------------</span>
+                            <span id="hex-footer" class="text-teal-400 opacity-30">--------</span>
+                        </div>
+                        <div class="h-1 w-full bg-slate-800 mt-2 rounded overflow-hidden">
+                            <div id="bit-progress" class="h-full bg-pink-500 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <!-- Core Structure Vis -->
+                     <div id="core-structure-vis" class="hidden bg-slate-900/80 p-4 rounded border border-amber-900/30">
+                        <h4 class="text-amber-500 text-xs font-bold mb-2 text-center">INTERNAL CORE STRUCTURE (64-BIT)</h4>
+                        <div class="core-grid">
+                            <div class="core-cell border-amber-500/50 text-amber-200"><span class="block text-[10px] text-amber-500">DYNAMIC</span><span id="struct-dyn">--</span></div>
+                            <div class="core-cell border-amber-600/50 text-amber-200"><span class="block text-[10px] text-amber-600">SCALE</span><span id="struct-s1">--</span></div>
+                            <div class="core-cell border-amber-400 text-white font-bold bg-amber-900/20" style="grid-column: span 1;"><span class="block text-[10px] text-amber-400">QUATERNION</span><span id="struct-quat">--------</span></div>
+                            <div class="core-cell border-amber-600/50 text-amber-200"><span class="block text-[10px] text-amber-600">SCALE</span><span id="struct-s2">--</span></div>
+                            <div class="core-cell border-amber-500/50 text-amber-200"><span class="block text-[10px] text-amber-500">SYMBOLIC</span><span id="struct-sym">--</span></div>
+                        </div>
+                    </div>
+                    <!-- Packet Vis -->
+                     <div class="bg-slate-900 rounded-xl p-8 border border-slate-800 shadow-2xl">
+                        <h2 class="text-xl font-semibold mb-8 text-center text-slate-300">LPF Assembly</h2>
+                        <div class="packet-container flex flex-col items-center space-y-4">
+                            <div id="vis-header" class="layer layer-inactive w-full h-16 border-2 border-dashed border-blue-500 rounded flex items-center justify-between px-4 bg-blue-500/10">
+                                <span class="text-xs text-blue-300 font-mono">0x<span id="vis-val-header">00000000</span></span>
+                                <div class="text-right"><span class="font-bold block text-sm">HEADER</span><span class="text-xs text-blue-400">32 Bits</span></div>
+                            </div>
+                            <div id="vis-core" class="layer layer-inactive w-full h-24 border-2 border-dashed border-amber-500 rounded flex items-center justify-between px-4 bg-amber-500/10">
+                                <span class="text-xs text-amber-300 font-mono">0x<span id="vis-val-core">00...00</span></span>
+                                <div class="text-right"><span class="font-bold block text-sm">CORE PAYLOAD</span><span class="text-xs text-amber-400">64 Bits</span></div>
+                            </div>
+                            <div id="vis-footer" class="layer layer-inactive w-full h-16 border-2 border-dashed border-teal-500 rounded flex items-center justify-between px-4 bg-teal-500/10">
+                                 <span class="text-xs text-teal-300 font-mono">0x<span id="vis-val-footer">00000000</span></span>
+                                <div class="text-right"><span class="font-bold block text-sm">FOOTER</span><span class="text-xs text-teal-400">32 Bits</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    <!-- Steps -->
+                    <div id="step-1" class="step-card p-6 bg-slate-800/50 rounded-r-lg"><h3 class="text-amber-400 font-bold text-lg mb-2">Step 1: Core Packet</h3><p class="text-slate-300 text-sm">Isolate 64-bit SHD-CCP token.</p></div>
+                    <div id="step-2" class="step-card p-6 bg-slate-800/50 rounded-r-lg"><h3 class="text-blue-400 font-bold text-lg mb-2">Step 2: Header</h3><p class="text-slate-300 text-sm">Add 32-bit metadata (Ver, Type, Time).</p></div>
+                    <div id="step-3" class="step-card p-6 bg-slate-800/50 rounded-r-lg"><h3 class="text-teal-400 font-bold text-lg mb-2">Step 3: Footer</h3><p class="text-slate-300 text-sm">Append 32-bit CRC32 checksum.</p></div>
+                    <div id="step-4" class="step-card p-6 bg-slate-800/50 rounded-r-lg">
+                        <h3 class="text-white font-bold text-lg mb-2">Step 4: Final LPF</h3>
+                        <p class="text-slate-300 text-sm mb-4">128-bit frame ready for wrapping.</p>
+                        <div class="flex space-x-2"><button onclick="animateStep(0)" class="px-4 py-2 bg-slate-700 rounded text-xs font-bold">RESET</button><button onclick="nextStep()" id="next-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-xs font-bold">NEXT STEP</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: SCP SECURITY (Original Tab 2) -->
+        <div id="tab-scp" class="tab-content hidden">
+            <!-- Security Controls -->
+            <div class="bg-slate-800/80 rounded-xl p-6 mb-8 border border-purple-900/50 shadow-lg">
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    <div>
+                        <h3 class="text-purple-400 font-bold text-sm uppercase tracking-wide mb-4">Protocol Configuration</h3>
+                        <div class="space-y-4">
+                            <!-- Packet Type Switch -->
+                            <div class="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-700">
+                                <span class="text-sm text-slate-300">Packet Type</span>
+                                <div class="flex bg-slate-800 rounded p-1">
+                                    <button onclick="setPacketType('genesis')" id="btn-genesis" class="px-4 py-1 rounded text-xs font-bold transition bg-purple-600 text-white">Genesis</button>
+                                    <button onclick="setPacketType('chained')" id="btn-chained" class="px-4 py-1 rounded text-xs font-bold transition text-slate-400 hover:text-white">Chained</button>
+                                </div>
+                            </div>
+                             <!-- Falcon Mode Switch -->
+                            <div class="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-700">
+                                <span class="text-sm text-slate-300">Falcon Security Level</span>
+                                <div class="flex bg-slate-800 rounded p-1">
+                                    <button onclick="setFalconMode(512)" id="btn-512" class="px-4 py-1 rounded text-xs font-bold transition bg-pink-600 text-white">Falcon-512</button>
+                                    <button onclick="setFalconMode(1024)" id="btn-1024" class="px-4 py-1 rounded text-xs font-bold transition text-slate-400 hover:text-white">Falcon-1024</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sim Control -->
+                    <div class="space-y-4">
+                        <h3 class="text-pink-400 font-bold text-sm uppercase tracking-wide mb-4">Transmission Simulator</h3>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Packet Count</label>
+                            <input type="range" id="sim-count" min="1000" max="100000" step="1000" value="10000" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                            <div class="flex justify-between mt-1">
+                                <span class="text-xs text-slate-500">1k</span>
+                                <span class="text-xs text-white font-mono"><span id="sim-count-val">10,000</span> Packets</span>
+                                <span class="text-xs text-slate-500">100k</span>
+                            </div>
+                        </div>
+                        <div class="bg-black/30 rounded p-2 text-center text-xs text-slate-400 border border-slate-700">
+                            Est. Bandwidth Usage: <span id="sim-bandwidth" class="text-white font-bold">--</span> MB
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCP Steps & Visualizer -->
+            <div class="grid lg:grid-cols-2 gap-8 items-start">
+                
+                <!-- Left: Visual Stack -->
+                <div class="sticky top-8">
+                     <!-- Current Size Display -->
+                    <div class="bg-black/50 rounded-lg p-4 border border-slate-700 font-mono text-sm mb-6 flex justify-between items-center">
+                        <span class="text-slate-400 text-xs uppercase font-bold">Current Packet Size</span>
+                        <span id="scp-total-size" class="text-pink-400 text-lg font-bold">16 Bytes</span>
+                    </div>
+
+                    <div class="bg-slate-900 rounded-xl p-8 border border-slate-800 shadow-2xl relative min-h-[500px] flex flex-col justify-end">
+                        <div class="absolute inset-0 opacity-5 pointer-events-none overflow-hidden">
+                             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                                <pattern id="lock-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                                    <path d="M10 10h20v20h-20z" fill="none" stroke="currentColor" stroke-width="0.5"/>
+                                </pattern>
+                                <rect width="100%" height="100%" fill="url(#lock-pattern)" />
+                            </svg>
+                        </div>
+                        
+                        <!-- Visual Stack -->
+                        <div class="flex flex-col-reverse items-center gap-2 relative z-10 w-full">
+                            <div id="vis-scp-lpf" class="crypto-block w-full h-12 bg-blue-600/20 border border-blue-500 rounded flex items-center justify-between px-4">
+                                <span class="text-xs text-blue-300 font-bold">1. LPF (Input)</span><span class="text-xs text-blue-400 mono">16 Bytes</span>
+                            </div>
+                            <div id="vis-scp-link" class="crypto-block crypto-hidden w-full h-24 bg-purple-600/20 border border-purple-500 rounded flex items-center justify-between px-4">
+                                <div class="text-left"><span class="text-xs text-purple-300 font-bold block" id="lbl-scp-link">2. Public Key</span><span class="text-[10px] text-purple-400/70 block mt-1 max-w-[200px]" id="desc-scp-link">Authorizes this genesis packet.</span></div><span class="text-xs text-purple-400 mono" id="size-scp-link">897 Bytes</span>
+                            </div>
+                            <div id="vis-scp-sig" class="crypto-block crypto-hidden w-full h-32 bg-pink-600/20 border border-pink-500 rounded flex items-center justify-between px-4 shadow-[0_0_30px_rgba(236,72,153,0.2)]">
+                                <div class="text-left"><span class="text-xs text-pink-300 font-bold block">3. Falcon Signature</span><span class="text-[10px] text-pink-400/70 block mt-1">Signs (LPF + Linkage)</span></div><span class="text-xs text-pink-400 mono" id="size-scp-sig">666 Bytes</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Explainer Steps -->
+                <div class="space-y-6">
+                    <div id="scp-step-1" class="step-card p-6 bg-slate-800/50 rounded-r-lg"><h3 class="text-blue-400 font-bold text-lg mb-2">Step 1: Input LPF</h3><p class="text-slate-300 text-sm">We take the 128-bit frame generated in the previous tab.</p><div class="mt-2 text-xs bg-black/30 p-2 rounded text-blue-300 mono">Size: 16 Bytes (Tiny)</div></div>
+                    <div id="scp-step-2" class="step-card p-6 bg-slate-800/50 rounded-r-lg"><h3 class="text-purple-400 font-bold text-lg mb-2" id="title-scp-2">Step 2: Add Linkage</h3><p class="text-slate-300 text-sm mb-2" id="text-scp-2">For Genesis, embed Full Key.</p><div class="mt-2 text-xs bg-black/30 p-2 rounded text-purple-300 mono" id="meta-scp-2">Adds ~897 Bytes</div></div>
+                    <div id="scp-step-3" class="step-card p-6 bg-slate-800/50 rounded-r-lg"><h3 class="text-pink-400 font-bold text-lg mb-2">Step 3: Falcon Signing</h3><p class="text-slate-300 text-sm mb-2">Sign the block to prove integrity.</p><div class="mt-2 text-xs bg-black/30 p-2 rounded text-pink-300 mono" id="meta-scp-3">Adds ~666 Bytes</div></div>
+                    <div id="scp-step-4" class="step-card p-6 bg-slate-800/50 rounded-r-lg">
+                        <h3 class="text-white font-bold text-lg mb-2">Step 4: Secure Chain Packet</h3>
+                        <p class="text-slate-300 text-sm mb-4">The final packet is assembled. Quantum-resistant, immutable, traceable.</p>
+                        <div class="flex space-x-2"><button onclick="animateSCPStep(0)" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition">RESET SCP</button><button onclick="nextSCPStep()" id="scp-next-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-xs font-bold transition">NEXT STEP</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: FLOW (Original Tab 3) -->
+        <div id="tab-flow" class="tab-content hidden">
+            <div class="mb-4 bg-slate-800 p-4 rounded-xl border border-slate-700 text-sm text-slate-400 flex justify-between items-center">
+                <span>Active Configuration: <strong class="text-white" id="flow-config-display">Chained / Falcon-512</strong></span>
+                <span class="text-xs text-slate-500">(Set via 'SCP Security' tab)</span>
+            </div>
+            
+            <div class="grid lg:grid-cols-3 gap-8 mb-8">
+                <!-- SENDER -->
+                <div id="node-sender" class="bg-slate-900 rounded-xl p-6 border border-slate-700 node-box">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <h3 class="font-bold text-slate-200">Sender (Alice)</h3>
+                    </div>
+                    <div class="space-y-2 text-xs font-mono text-slate-500">
+                        <div id="flow-op-gen" class="flex justify-between p-2 rounded bg-slate-800/50"><span>1. Gen LPF</span><span class="status">...</span></div>
+                        <div id="flow-op-sign" class="flex justify-between p-2 rounded bg-slate-800/50"><span>2. Falcon Sign</span><span class="status">...</span></div>
+                    </div>
+                </div>
+
+                <!-- CHANNEL -->
+                <div class="relative flex items-center justify-center min-h-[150px]">
+                    <div class="w-full h-1 bg-slate-700 rounded overflow-hidden">
+                        <div id="flow-wire-active" class="h-full bg-blue-500 w-0 transition-all duration-[1500ms]"></div>
+                    </div>
+                    <div id="flow-packet" class="traveling-packet w-12 h-12 bg-pink-600 rounded-lg shadow-[0_0_20px_rgba(236,72,153,0.6)] flex items-center justify-center opacity-0 scale-50">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
+                </div>
+
+                <!-- RECEIVER -->
+                <div id="node-receiver" class="bg-slate-900 rounded-xl p-6 border border-slate-700 node-box">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-3 h-3 bg-teal-500 rounded-full"></div>
+                        <h3 class="font-bold text-slate-200">Receiver (Bob)</h3>
+                    </div>
+                    <div class="space-y-2 text-xs font-mono text-slate-500">
+                        <div id="flow-op-crc" class="flex justify-between p-2 rounded bg-slate-800/50 items-center">
+                            <span>3. Verify CRC</span>
+                            <div class="check-badge bg-green-500 text-black px-1 rounded font-bold">OK</div>
+                        </div>
+                        <div id="flow-op-link" class="flex justify-between p-2 rounded bg-slate-800/50 items-center">
+                            <span>4. Check Link</span>
+                            <div class="check-badge bg-green-500 text-black px-1 rounded font-bold">OK</div>
+                        </div>
+                        <div id="flow-op-sig" class="flex justify-between p-2 rounded bg-slate-800/50 items-center">
+                            <span>5. Verify Sig</span>
+                            <div class="check-badge bg-green-500 text-black px-1 rounded font-bold">OK</div>
+                        </div>
+                        <div id="flow-op-unpack" class="flex justify-between p-2 rounded bg-slate-800/50 items-center">
+                            <span>6. Unpack</span>
+                            <div class="check-badge bg-blue-500 text-white px-1 rounded font-bold">DONE</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-black/40 border border-slate-800 p-6 rounded-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-slate-400 font-bold text-sm uppercase">Verification Log</h3>
+                    <div class="flex gap-2">
+                        <button onclick="animateFlowStep(0)" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition text-white">RESET</button>
+                        <button onclick="nextFlowStep()" id="flow-btn-next" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-xs font-bold transition text-white">START FLOW</button>
+                    </div>
+                </div>
+                <div id="flow-log" class="font-mono text-xs text-slate-300 space-y-2 h-32 overflow-y-auto">
+                    <p class="text-slate-500 italic">Waiting to start simulation...</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- SHARED UTILS ---
+        function getRandomHex(bytes) {
+            const hex = "0123456789ABCDEF";
+            let output = "";
+            for (let i = 0; i < bytes * 2; i++) output += hex.charAt(Math.floor(Math.random() * 16));
+            return output;
+        }
+
+        // --- TAB SWITCHING ---
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.getElementById(`btn-${tab}`).classList.add('active');
+            
+            // Scroll to top for better UX
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (tab === 'cal') { /* no-op */ }
+            if (tab === 'lpf') { /* no-op */ }
+            if (tab === 'scp') animateSCPStep(0);
+            if (tab === 'flow') animateFlowStep(0);
+        }
+
+        // --- TAB 1: LPF LOGIC ---
+        let lpfStep = 0;
+        let corePacket = { dynamic: '00', scale1: '00', quaternion: '00000000', scale2: '00', symbolic: '00' };
+
+        function generateRandomPacket() {
+            corePacket.dynamic = getRandomHex(1); corePacket.scale1 = getRandomHex(1);
+            corePacket.quaternion = getRandomHex(4); corePacket.scale2 = getRandomHex(1);
+            corePacket.symbolic = getRandomHex(1);
+            updateCoreStructureUI(); updateCalculations();
+            animateStep(1);
+        }
+        
+        function updateCoreStructureUI() {
+            document.getElementById('struct-dyn').textContent = corePacket.dynamic;
+            document.getElementById('struct-s1').textContent = corePacket.scale1;
+            document.getElementById('struct-quat').textContent = corePacket.quaternion;
+            document.getElementById('struct-s2').textContent = corePacket.scale2;
+            document.getElementById('struct-sym').textContent = corePacket.symbolic;
+            const fullCore = getCoreHex();
+            document.getElementById('hex-core').textContent = fullCore; document.getElementById('vis-val-core').textContent = fullCore;
+        }
+
+        function getCoreHex() { return `${corePacket.dynamic}${corePacket.scale1}${corePacket.quaternion}${corePacket.scale2}${corePacket.symbolic}`; }
+        function getHeaderHex() { return `${document.getElementById('input-ver').value.padEnd(1,'0')}${document.getElementById('input-type').value.padEnd(1,'0')}${document.getElementById('input-time').value.padEnd(6,'0')}`; }
+        function getFooterHex() { return document.getElementById('input-crc').value.padEnd(8,'0'); }
+
+        function updateCalculations() {
+            document.getElementById('hex-header').textContent = getHeaderHex(); document.getElementById('vis-val-header').textContent = getHeaderHex();
+            document.getElementById('hex-footer').textContent = getFooterHex(); document.getElementById('vis-val-footer').textContent = getFooterHex();
+        }
+
+        function animateStep(step) {
+            lpfStep = step;
+            const layers = ['header', 'core', 'footer'];
+            layers.forEach(l => {
+                const el = document.getElementById(`vis-${l}`);
+                el.className = `layer layer-inactive w-full ${l === 'core' ? 'h-24' : 'h-16'} border-2 border-dashed rounded flex items-center justify-between px-4`;
+                if(l === 'header') el.classList.add('border-blue-500', 'bg-blue-500/10');
+                if(l === 'core') el.classList.add('border-amber-500', 'bg-amber-500/10');
+                if(l === 'footer') el.classList.add('border-teal-500', 'bg-teal-500/10');
+            });
+            document.getElementById('hex-header').className = 'text-blue-400 opacity-30';
+            document.getElementById('hex-core').className = 'text-amber-400 opacity-30';
+            document.getElementById('hex-footer').className = 'text-teal-400 opacity-30';
+            let bits = 0; let progress = 0;
+            document.getElementById('core-structure-vis').classList.add('hidden');
+            for(let i=1; i<=4; i++) document.getElementById(`step-${i}`).classList.remove('active');
+
+            if(step >= 1) { document.getElementById('step-1').classList.add('active'); document.getElementById('vis-core').classList.replace('layer-inactive', 'layer-active'); document.getElementById('hex-core').classList.replace('opacity-30', 'font-bold'); document.getElementById('core-structure-vis').classList.remove('hidden'); bits = 64; progress = 50; }
+            if(step >= 2) { document.getElementById('step-2').classList.add('active'); document.getElementById('vis-header').classList.replace('layer-inactive', 'layer-active'); document.getElementById('hex-header').classList.replace('opacity-30', 'font-bold'); bits = 96; progress = 75; }
+            if(step >= 3) { document.getElementById('step-3').classList.add('active'); document.getElementById('vis-footer').classList.replace('layer-inactive', 'layer-active'); document.getElementById('hex-footer').classList.replace('opacity-30', 'font-bold'); bits = 128; progress = 100; }
+            if(step >= 4) { document.getElementById('step-4').classList.add('active'); document.getElementById('next-btn').textContent = "COMPLETE"; } else { document.getElementById('next-btn').textContent = "NEXT STEP"; }
+            document.getElementById('total-bits-display').textContent = `${bits} Bits`; document.getElementById('bit-progress').style.width = `${progress}%`;
+        }
+        function nextStep() { if(lpfStep < 4) { lpfStep++; animateStep(lpfStep); } else { animateStep(0); } }
+
+        // --- TAB 2: SCP LOGIC ---
+        let scpStep = 0;
+        let scpState = { type: 'genesis', falcon: 512 };
+        const sizes = { genesis: { 512: { k: 897, s: 666 }, 1024: { k: 1793, s: 1280 } }, chained: { 512: { k: 666, s: 666 }, 1024: { k: 1280, s: 1280 } } };
+        const lpfSize = 16;
+
+        function setPacketType(t) {
+            scpState.type = t;
+            document.getElementById('btn-genesis').className = `px-4 py-1 rounded text-xs font-bold transition ${t==='genesis'?'bg-purple-600 text-white':'text-slate-400 hover:text-white'}`;
+            document.getElementById('btn-chained').className = `px-4 py-1 rounded text-xs font-bold transition ${t==='chained'?'bg-purple-600 text-white':'text-slate-400 hover:text-white'}`;
+            animateSCPStep(scpStep);
+        }
+
+        function setFalconMode(m) {
+            scpState.falcon = m;
+            document.getElementById('btn-512').className = `px-4 py-1 rounded text-xs font-bold transition ${m===512?'bg-pink-600 text-white':'text-slate-400 hover:text-white'}`;
+            document.getElementById('btn-1024').className = `px-4 py-1 rounded text-xs font-bold transition ${m===1024?'bg-pink-600 text-white':'text-slate-400 hover:text-white'}`;
+            animateSCPStep(scpStep);
+        }
+
+        function animateSCPStep(step) {
+            scpStep = step;
+            const data = sizes[scpState.type][scpState.falcon];
+            
+            if(scpState.type === 'genesis') {
+                document.getElementById('title-scp-2').textContent = 'Step 2: Embed Public Key';
+                document.getElementById('text-scp-2').innerHTML = 'Embed full <strong>Falcon Public Key</strong>. Self-verifying.';
+                document.getElementById('lbl-scp-link').textContent = '2. Public Key';
+                document.getElementById('desc-scp-link').textContent = 'Authorizes this chain.';
+            } else {
+                document.getElementById('title-scp-2').textContent = 'Step 2: Link Previous Sig';
+                document.getElementById('text-scp-2').innerHTML = 'Embed <strong>Prev Sig</strong>. Creates hash chain.';
+                document.getElementById('lbl-scp-link').textContent = '2. Previous Sig';
+                document.getElementById('desc-scp-link').textContent = 'Links to history.';
+            }
+
+            document.getElementById('meta-scp-2').textContent = `Adds ~${data.k} Bytes`; document.getElementById('size-scp-link').textContent = `${data.k} Bytes`;
+            document.getElementById('meta-scp-3').textContent = `Adds ~${data.s} Bytes`; document.getElementById('size-scp-sig').textContent = `${data.s} Bytes`;
+
+            for(let i=1; i<=4; i++) document.getElementById(`scp-step-${i}`).classList.remove('active');
+            document.getElementById('vis-scp-link').className = 'crypto-block crypto-hidden w-full h-24 bg-purple-600/20 border border-purple-500 rounded flex items-center justify-between px-4';
+            document.getElementById('vis-scp-sig').className = 'crypto-block crypto-hidden w-full h-32 bg-pink-600/20 border border-pink-500 rounded flex items-center justify-between px-4 shadow-[0_0_30px_rgba(236,72,153,0.2)]';
+
+            let currentSize = 0;
+            if(step >= 1) { document.getElementById('scp-step-1').classList.add('active'); currentSize += lpfSize; }
+            if(step >= 2) { document.getElementById('scp-step-2').classList.add('active'); document.getElementById('vis-scp-link').classList.replace('crypto-hidden', 'crypto-visible'); currentSize += data.k; }
+            if(step >= 3) { document.getElementById('scp-step-3').classList.add('active'); document.getElementById('vis-scp-sig').classList.replace('crypto-hidden', 'crypto-visible'); currentSize += data.s; }
+            if(step >= 4) { document.getElementById('scp-step-4').classList.add('active'); document.getElementById('scp-next-btn').textContent = "COMPLETE"; } else { document.getElementById('scp-next-btn').textContent = "NEXT STEP"; }
+
+            document.getElementById('scp-total-size').textContent = `${currentSize.toLocaleString()} Bytes`;
+            runSimulator(currentSize);
+        }
+
+        function nextSCPStep() { if(scpStep < 4) { scpStep++; animateSCPStep(scpStep); } else { animateSCPStep(0); } }
+
+        function runSimulator(currentSizeBytes) {
+            let size = currentSizeBytes || (lpfSize + sizes[scpState.type][scpState.falcon].k + sizes[scpState.type][scpState.falcon].s);
+            const count = parseInt(document.getElementById('sim-count').value);
+            const totalBytes = size * count;
+            document.getElementById('sim-count-val').textContent = count.toLocaleString();
+            document.getElementById('sim-bandwidth').textContent = (totalBytes / 1000000).toFixed(2);
+        }
+        document.getElementById('sim-count').addEventListener('input', () => animateSCPStep(scpStep));
+
+        // --- TAB 3: FLOW LOGIC (UPDATED WITH BIT DATA) ---
+        let flowStep = 0;
+
+        function logFlow(msg, color='text-slate-300') {
+            const log = document.getElementById('flow-log');
+            log.innerHTML += `<div class="${color}">> ${msg}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function setCheck(id, active) {
+            const badge = document.querySelector(`#${id} .check-badge`);
+            if(active) badge.classList.add('check-visible');
+            else badge.classList.remove('check-visible');
+            
+            const row = document.getElementById(id);
+            if(active) row.classList.add('bg-slate-700');
+            else row.classList.remove('bg-slate-700');
+        }
+
+        function animateFlowStep(step) {
+            flowStep = step;
+            const packet = document.getElementById('flow-packet');
+            const wire = document.getElementById('flow-wire-active');
+            
+            // Get Current Config from SCP State
+            const type = scpState.type.charAt(0).toUpperCase() + scpState.type.slice(1);
+            const falcon = scpState.falcon;
+            const data = sizes[scpState.type][falcon];
+            const totalBytes = lpfSize + data.k + data.s;
+
+            // Reset
+            if (step === 0) {
+                document.getElementById('flow-log').innerHTML = '';
+                document.getElementById('flow-config-display').textContent = `${type} / Falcon-${falcon}`;
+                logFlow(`Config: ${type} Packet, Falcon-${falcon} Encryption`);
+                logFlow("Simulation ready.");
+                
+                document.getElementById('node-sender').classList.remove('node-active');
+                document.getElementById('node-receiver').classList.remove('node-active');
+                
+                packet.style.opacity = '0';
+                packet.style.transform = 'scale(0.5)';
+                packet.style.left = '20px';
+                wire.style.width = '0%';
+
+                ['flow-op-crc', 'flow-op-link', 'flow-op-sig', 'flow-op-unpack'].forEach(id => setCheck(id, false));
+                document.getElementById('flow-btn-next').textContent = "START FLOW";
+            }
+
+            // Step 1: Assembly
+            if (step === 1) {
+                document.getElementById('node-sender').classList.add('node-active');
+                logFlow("Sender: Assembling LPF (16 Bytes / 128 Bits)...");
+                setTimeout(() => {
+                    logFlow(`Sender: Adding ${scpState.type === 'genesis' ? 'Public Key' : 'Prev Sig'} (+${data.k} Bytes)...`, "text-purple-300");
+                }, 400);
+                setTimeout(() => {
+                    logFlow(`Sender: Signing packet (+${data.s} Bytes)...`, "text-pink-300");
+                }, 800);
+                
+                packet.style.opacity = '1';
+                packet.style.transform = 'scale(1)';
+                packet.style.left = '15%'; 
+                document.getElementById('flow-btn-next').textContent = "TRANSMIT";
+            }
+
+            // Step 2: Transmission
+            if (step === 2) {
+                logFlow(`Network: Transmitting ${totalBytes.toLocaleString()} Bytes...`, "text-blue-400");
+                wire.style.width = '100%';
+                packet.style.left = '80%'; 
+                document.getElementById('flow-btn-next').textContent = "VERIFY";
+            }
+
+            // Step 3: Verify & Unpack
+            if (step === 3) {
+                document.getElementById('node-sender').classList.remove('node-active');
+                document.getElementById('node-receiver').classList.add('node-active');
+                logFlow("Receiver: Packet received.", "text-teal-400");
+                
+                setTimeout(() => { 
+                    setCheck('flow-op-crc', true); 
+                    logFlow("Check 1: CRC32 Integrity (32 bits) [PASS]", "text-green-400");
+                }, 400);
+
+                setTimeout(() => { 
+                    setCheck('flow-op-link', true); 
+                    logFlow(`Check 2: Chain Linkage (${data.k} Bytes) [PASS]`, "text-green-400");
+                }, 1200);
+
+                setTimeout(() => { 
+                    setCheck('flow-op-sig', true); 
+                    logFlow(`Check 3: Falcon Signature (${data.s} Bytes) [PASS]`, "text-green-400");
+                }, 2000);
+
+                setTimeout(() => { 
+                    setCheck('flow-op-unpack', true); 
+                    logFlow("Action: Payload Unpacked (16 Bytes). Executing...", "text-blue-400");
+                    document.getElementById('flow-btn-next').textContent = "RESET";
+                }, 2800);
+            }
+        }
+
+        function nextFlowStep() {
+            if (flowStep < 3) {
+                flowStep++;
+                animateFlowStep(flowStep);
+            } else {
+                animateFlowStep(0);
+            }
+        }
+
+        // Initialize: Show Cal tab (Tab 1 now in UI order, technically 'cal')
+        window.onload = () => { 
+            generateRandomPacket(); 
+            switchTab('cal'); // Default to Calibration Tab
+        };
+    </script>
+</body>
+</html>
